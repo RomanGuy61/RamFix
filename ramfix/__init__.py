@@ -4,5 +4,5 @@ The package intentionally keeps the platform-specific code isolated in
 ``cleaner.py`` so the CLI and reporting layers stay simple and testable.
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __all__ = ["__version__"]

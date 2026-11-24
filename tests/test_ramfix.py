@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from unittest.mock import patch
 
+from ramfix.automation import GuardConfig, add_watch, load_config, remove_watch, set_threshold
 from ramfix.cleaner import CACHE, GC, clean, clean_action
+from ramfix.compression import get_zram_devices
+from ramfix.limits import sanitize_name
 from ramfix.stats import get_memory_stats, get_top_processes
 from ramfix.swap import get_swap_devices, get_swappiness, parse_size
 from ramfix.utils import bar, get_platform, human_bytes, privilege_wrap
@@ -61,6 +67,31 @@ class TestSwapHelpers(unittest.TestCase):
         self.assertIsInstance(get_swap_devices(), list)
         value = get_swappiness()
         self.assertTrue(value is None or 0 <= value <= 200)
+
+
+class TestV2Helpers(unittest.TestCase):
+    def test_sanitize_name(self):
+        self.assertEqual(sanitize_name("My App!"), "My-App")
+        self.assertEqual(sanitize_name("  "), "app")
+        self.assertNotIn("/", sanitize_name("a/b"))
+
+    def test_config_roundtrip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}):
+                config = load_config()
+                self.assertIsInstance(config, GuardConfig)
+                self.assertEqual(config.threshold, 85.0)
+                self.assertTrue(set_threshold(90)[0])
+                self.assertTrue(add_watch("firefox")[0])
+                self.assertIn("firefox", load_config().watch_apps)
+                self.assertTrue(remove_watch("firefox")[0])
+                self.assertFalse(set_threshold(500)[0])
+
+    def test_zram_devices(self):
+        devices = get_zram_devices()
+        self.assertIsInstance(devices, list)
+        for device in devices:
+            self.assertGreaterEqual(device.ratio, 0.0)
 
 
 class TestStats(unittest.TestCase):
